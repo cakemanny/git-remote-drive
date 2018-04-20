@@ -65,7 +65,7 @@ func dispatch(line string, out io.Writer, manager Manager) {
 	command := fields[0]
 	switch command {
 	case "capabilities":
-		fmt.Fprintln(out, "push") // FIXME: shouldn't have this for RO store
+		fmt.Fprintln(out, "push")
 		fmt.Fprintln(out, "fetch")
 		fmt.Fprintln(out, "option")
 		fmt.Fprintln(out)

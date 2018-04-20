@@ -242,10 +242,12 @@ func (client driveAPIClient) List(path string) ([]File, error) {
 }
 
 func (client driveAPIClient) Delete(path string) error {
-	// not sure this is needed
+	// not sure this is needed -- maybe for refs?
 	return errors.New("not implemented")
 }
 
 func (client driveAPIClient) Update(path string, contents io.Reader) error {
+	// Only expect this to be used for refs
+
 	return errors.New("not implemented")
 }
