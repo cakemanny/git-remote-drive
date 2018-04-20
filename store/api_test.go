@@ -1,4 +1,4 @@
-package drivestore
+package store
 
 import (
 	"fmt"

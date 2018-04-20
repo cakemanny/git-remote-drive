@@ -1,4 +1,4 @@
-package drivestore
+package store
 
 import (
 	"encoding/json"
@@ -24,32 +24,10 @@ var (
 
 	// So we get compile-time errors when we fat-finger this
 	appDataFolder = "appDataFolder"
-
-	// ErrNotFound is returned when a file cannot be found
-	ErrNotFound = errors.New("not found")
 )
 
-type File struct {
-    IsFolder bool
-    Name string
-}
-
-type ReadOnlyStore interface {
-	Read(path string, contents io.Writer) error
-    List(path string) ([]File, error)
-}
-
-// SimpleFileStore is a simplied interface over a file store
-type SimpleFileStore interface {
-	Create(path string, contents io.Reader) error
-	Read(path string, contents io.Writer) error
-	Update(path string, contents io.Reader) error
-	Delete(path string) error
-    List(path string) ([]File, error)
-}
-
-// DriveAPIClient is an implementation of a file store using Google Drive.
-type DriveAPIClient struct {
+// driveAPIClient is an implementation of a SimpleFileStore using Google Drive.
+type driveAPIClient struct {
 	srv *drive.Service
 }
 
@@ -106,7 +84,7 @@ func saveToken(path string, token *oauth2.Token) {
 
 // NewClient runs the outh flow if necessary and builds an authenticated
 // Google Drive client
-func NewClient() DriveAPIClient {
+func NewClient() SimpleFileStore {
 	b, err := ioutil.ReadFile(secretPath)
 	if err != nil {
 		log.Fatalf("Unable to read client secret file: %v", err)
@@ -122,12 +100,12 @@ func NewClient() DriveAPIClient {
 	if err != nil {
 		log.Fatalf("Unable to retrieve Drive client: %v", err)
 	}
-	return DriveAPIClient{srv}
+	return driveAPIClient{srv}
 }
 
 // MkDir creates a folder recursively (think mkdir -p) and returns the
 // file id of the created directory.
-func (client DriveAPIClient) MkDir(path string) (string, error) {
+func (client driveAPIClient) MkDir(path string) (string, error) {
 	parentID, err := GetIDRecursive(client, path)
 	if err == ErrNotFound {
 		parentID, err = client.MkDir(paths.Dir(path))
@@ -149,7 +127,7 @@ func (client DriveAPIClient) MkDir(path string) (string, error) {
 
 // GetID returns the file ID of a file with the given name in the
 // folder with ID parentID
-func (client DriveAPIClient) GetID(name string, parentID string) (string, error) {
+func (client driveAPIClient) GetID(name string, parentID string) (string, error) {
 	if parentID == "" {
 		parentID = appDataFolder
 	}
@@ -163,7 +141,8 @@ func (client DriveAPIClient) GetID(name string, parentID string) (string, error)
 	}
 	r, err := client.srv.Files.List().Spaces(appDataFolder).
 		PageSize(2).
-		Q(fmt.Sprintf("name = '%s' and '%s' in parents and trashed = false", name, parentID)).
+		Q(fmt.Sprintf("name = '%s' and '%s' in parents and trashed = false",
+			name, parentID)).
 		Fields("files(id)").
 		Do()
 	if err != nil {
@@ -174,35 +153,13 @@ func (client DriveAPIClient) GetID(name string, parentID string) (string, error)
 	}
 	// Should we error if there are more than one result?
 	if len(r.Files) > 1 {
-		log.Printf("Warning: \n")
+		log.Printf("warning: more than one \"%s\"\n", name)
 	}
 	return r.Files[0].Id, nil
 }
 
-// define this to allow us to unit test the recursive ID getter
-type idGetter interface {
-	GetID(name string, parentID string) (string, error)
-}
-
-// GetIDRecursive navigates up the directory tree
-func GetIDRecursive(client idGetter, path string) (string, error) {
-	parentPath, name := paths.Dir(path), paths.Base(path)
-	if parentPath == "." {
-		// No more parent IDs to get
-		return client.GetID(name, "")
-	}
-	// Not root level. Find in parent
-	parentID, err := GetIDRecursive(client, parentPath)
-	if err != nil {
-		return "", err
-	}
-	return client.GetID(name, parentID)
-}
-
-// TODO: implement caching around ID getter
-
 // Create creates a file in the user's Google Drive
-func (client DriveAPIClient) Create(path string, contents io.Reader) error {
+func (client driveAPIClient) Create(path string, contents io.Reader) error {
 	// 1. Resolve the parent path - create if not exists
 	parentPath := paths.Dir(path)
 	parentID, err := func() (string, error) {
@@ -233,20 +190,62 @@ func (client DriveAPIClient) Create(path string, contents io.Reader) error {
 	return nil
 }
 
-func (client DriveAPIClient) Read(path string, contents io.Writer) error {
+func (client driveAPIClient) Read(path string, contents io.Writer) error {
+	fileID, err := func() (string, error) {
+		if path == "/" || path == "" {
+			return appDataFolder, nil
+		}
+		return GetIDRecursive(client, path)
+	}()
+	if err != nil {
+		return err
+	}
+	r, err := client.srv.Files.Get(fileID).Download()
+	if err != nil {
+		return fmt.Errorf("error requesting \"%s\": %v", path, err)
+	}
+	_, err = io.Copy(contents, r.Body)
+	if err != nil {
+		return fmt.Errorf("while reading \"%s\": %v", path, err)
+	}
+	// Not sure we care about the close error is we managed to read all
+	// successfully
+	r.Body.Close()
+	return nil
+}
 
+func (client driveAPIClient) List(path string) ([]File, error) {
+	folderID, err := func() (string, error) {
+		if path == "/" || path == "" {
+			return appDataFolder, nil
+		}
+		return GetIDRecursive(client, path)
+	}()
+
+	// Would we need to escape folderID ever?
+	r, err := client.srv.Files.List().Spaces(appDataFolder).
+		Q(fmt.Sprintf("'%s' in parents and trashed = false", folderID)).
+		Fields("files(id,name,mimeType)").
+		Do()
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]File, len(r.Files))
+	for i, f := range r.Files {
+		results[i] = File{
+			IsFolder: (f.MimeType == "application/vnd.google-apps.folder"),
+			Name:     f.Name,
+		}
+	}
+	return results, nil
+}
+
+func (client driveAPIClient) Delete(path string) error {
+	// not sure this is needed
 	return errors.New("not implemented")
 }
 
-func (client DriveAPIClient) List(path string) ([]File, error) {
-
-    return nil, errors.New("not implemented")
-}
-
-func (client DriveAPIClient) Delete(path string) error {
-    return errors.New("not implemented")
-}
-
-func (client DriveAPIClient) Update(path string, contents io.Reader) error {
-    return errors.New("not implemented")
+func (client driveAPIClient) Update(path string, contents io.Reader) error {
+	return errors.New("not implemented")
 }
