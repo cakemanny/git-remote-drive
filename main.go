@@ -128,12 +128,8 @@ func dispatch(line string, out io.Writer, manager Manager) {
 			return x[0], x[1]
 		}()
 
-		// TODO: init me
-		var localStore store.SimpleFileStore
-
-		var localManager Manager = storeManager{
-			basePath: os.ExpandEnv("$GIT_DIR"),
-			store:    localStore,
+		var localManager Manager = localGit{
+			gitDir: os.Getenv("GIT_DIR"),
 		}
 
 		localRef, err := localManager.ReadRef(localRefName)
@@ -147,7 +143,11 @@ func dispatch(line string, out io.Writer, manager Manager) {
 
 		var _ = localRef
 		var _ = remoteRef
+		log.Println("localRef", localRef)
+		log.Println("remoteRef", remoteRef)
 
+		fmt.Fprintf(out, "error %s \"implementation not finished\"\n", localRefName)
+		fmt.Fprintln(out)
 	default:
 	}
 }

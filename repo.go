@@ -15,14 +15,41 @@ import (
 // Manager is an abstraction over some of the simplest operations you might
 // want to perform against a git repository
 type Manager interface {
+
+	// ListRefs lists all the references in a repository. You can assume it
+	// does this by scanning the refs directory of the repo.
 	ListRefs() ([]Ref, error)
+
+	// ReadRef reads the sha1 stored in a reference. For example, to read the
+	// objectname (sha1) of the head commit of the master branch, you might do
+	// this:
+	//	sha1value, err := manager.ReadRef("refs/heads/master")
+	//	if err != nil {
+	//		// handle error
+	//	}
+	//	fmt.Println(sha1value)
 	ReadRef(name string) (string, error)
+
+	// WriteRef is the complement of ReadRef. It writes ref.Value to the path
+	// ref.Name relative to the repository root.
 	WriteRef(ref Ref) error
+
+	// ReadObject reads an object, including decompressing and pretty printing
+	// the output. Think git cat-file
 	ReadObject(sha string, contents io.Writer) error
+
+	// ReadRaw reads a git repo object without decompressing. Useful for
+	// quickly transfering an object without needing to understand it
 	ReadRaw(sha string, contents io.Writer) error
+
+	// WriteRaw is the complement to ReadRaw. It writes the contents of an
+	// object directly to the git repository assuming the stream is already
+	// compressed
 	WriteRaw(sha string, contents io.Reader) error
 }
 
+// RefLister is a subinterface of Manager only requiring the ListRefs method to
+// be implemented.
 type RefLister interface {
 	ListRefs() ([]Ref, error)
 }
@@ -30,7 +57,7 @@ type RefReader interface {
 	ReadRef(name string) (string, error)
 }
 
-// prove at compiletime that RefLister is a subinterface on Manager
+// prove at compile-time that RefLister is a subinterface on Manager
 var manager0 Manager
 var refLister0 RefLister = manager0
 
@@ -42,6 +69,8 @@ type Ref struct {
 	Name string
 }
 
+// storeManager is an implementation of the git repo Manager over a
+// SimpleFileStore
 type storeManager struct {
 	// relative path from the root of the store
 	// e.g. ".git" for a local repo or "user/reponame.git" for a remote say
