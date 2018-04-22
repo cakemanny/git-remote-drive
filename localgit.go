@@ -72,7 +72,19 @@ func (lg localGit) WriteRef(ref Ref) error {
 }
 
 func (lg localGit) ReadObject(sha string, contents io.Writer) error {
-	return errors.New("not implemented")
+	cmd := exec.Command("git", "cat-file", "-p", sha)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("redirecting stdout: %v", err)
+	}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("starting git cat-file: %v", err)
+	}
+	io.Copy(contents, stdout)
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("git cat-file: %v", err)
+	}
+	return nil
 }
 
 func (lg localGit) ReadRaw(sha string, contents io.Writer) error {

@@ -4,10 +4,11 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 )
 
-func TestLocalListRefs(t *testing.T) {
+func TestLocalGit(t *testing.T) {
 	startDir := os.Getenv("PWD")
 
 	tmpDir, err := ioutil.TempDir("", "tmprepo")
@@ -29,17 +30,34 @@ func TestLocalListRefs(t *testing.T) {
 	}
 
 	var lg Manager = localGit{gitDir: ".git"}
-	refs, err := lg.ListRefs()
-	if err != nil {
-		t.Error("unexpected error", err)
-	}
 
-	expectedName := "refs/heads/master"
+	t.Run("TestReadRef", func(t *testing.T) {
+		refs, err := lg.ListRefs()
+		if err != nil {
+			t.Fatal("unexpected error", err)
+		}
 
-	if len(refs) != 1 || refs[0].Name != expectedName || len(refs[0].Value) != 40 {
-		t.Error(
-			"expected:", expectedName,
-			"actual:", refs,
-		)
-	}
+		expectedName := "refs/heads/master"
+
+		if len(refs) != 1 || refs[0].Name != expectedName || len(refs[0].Value) != 40 {
+			t.Error(
+				"expected:", expectedName,
+				"actual:", refs,
+			)
+		}
+	})
+
+	t.Run("TestReadObject", func(t *testing.T) {
+
+		hisha := "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
+		var sb strings.Builder
+		err = lg.ReadObject(hisha, &sb)
+		if err != nil {
+			t.Fatal("unexpected error", err)
+		}
+		expected := "hi\n"
+		if sb.String() != expected {
+			t.Errorf(`expected: "%s", actual: "%s"`, expected, sb.String())
+		}
+	})
 }

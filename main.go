@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -141,15 +140,37 @@ func dispatch(line string, out io.Writer, manager Manager) {
 		if err != nil {
 			log.Fatalln(err)
 		}
-
-		var _ = localRef
-		var _ = remoteRef
 		log.Println("localRef", localRef)
 		log.Println("remoteRef", remoteRef)
+
+		toSync, err := reachableObjects(localManager, localRef)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		toSync[localRef] = true
+		log.Println("localObjects:", toSync)
+		inRemote, err := reachableObjects(
+			// objects in remote are also in local, so use local since it will
+			// be nearer
+			localManager, remoteRef,
+		)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		inRemote[remoteRef] = true
+		log.Println("inRemote:", inRemote)
+		for k, _ := range inRemote {
+			delete(toSync, k)
+		}
+		log.Println("toSync:", toSync)
+
+		// Now send all the objects
+		// Then update the remote ref
 
 		fmt.Fprintf(out, "error %s \"implementation not finished\"\n", localRefName)
 		fmt.Fprintln(out)
 	default:
+		// TODO: say we don't support the command
 	}
 }
 
@@ -168,6 +189,15 @@ func listRefs(out io.Writer, lister RefLister) {
 	fmt.Fprintln(out)
 }
 
+func mergeInto(dst, src map[string]bool) {
+	for k, v := range src {
+		// test v so that we don't add to dst unnecessarily
+		if v {
+			dst[k] = true
+		}
+	}
+}
+
 func reachableObjects(m Manager, commitRef string) (map[string]bool, error) {
 	commit, err := GetCommit(m, commitRef)
 	if err != nil {
@@ -176,24 +206,13 @@ func reachableObjects(m Manager, commitRef string) (map[string]bool, error) {
 
 	result := map[string]bool{}
 
-	mergeInto := func(dst, src map[string]bool) {
-		for k, v := range src {
-			// test v so that we don't add to dst unnecessarily
-			if v {
-				dst[k] = true
-			}
-		}
-	}
-
-	//
 	{
+		result[commit.Tree] = true
 		tobs, err := reachableObjectsFromTree(m, commit.Tree)
 		if err != nil {
 			return nil, fmt.Errorf("exploring tree %s: %v", commit.Tree, err)
 		}
-		result[commit.Tree] = true
 		mergeInto(result, tobs)
-		tobs = nil
 	}
 
 	for _, parentRef := range commit.Parents {
@@ -203,14 +222,28 @@ func reachableObjects(m Manager, commitRef string) (map[string]bool, error) {
 			return nil, fmt.Errorf("getting parent commits of %s: %v", commitRef, err)
 		}
 		mergeInto(result, pobs)
-		pobs = nil
 	}
 
 	return result, nil
 }
 
 func reachableObjectsFromTree(m Manager, treeRef string) (map[string]bool, error) {
-	return nil, errors.New("not implemented")
+	tree, err := GetTree(m, treeRef)
+	if err != nil {
+		return nil, fmt.Errorf("getting tree %s: %v", treeRef, err)
+	}
+	result := map[string]bool{}
+	for _, item := range tree {
+		result[item.Ref] = true
+		if item.Type == TREE {
+			tobs, err := reachableObjectsFromTree(m, item.Ref)
+			if err != nil {
+				return nil, fmt.Errorf("exploring tree %s: %v", item.Ref, err)
+			}
+			mergeInto(result, tobs)
+		}
+	}
+	return result, nil
 }
 
 //

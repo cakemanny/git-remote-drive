@@ -204,18 +204,34 @@ func (storeManager) WriteRef(ref Ref) error {
 }
 
 func GetCommit(m Manager, ref string) (Commit, error) {
-	rdr, wrtr := io.Pipe()
-	go m.ReadObject(ref, wrtr)
+	if len(ref) != 40 {
+		panic(ref)
+	}
+	var sb strings.Builder
+	if err := m.ReadObject(ref, &sb); err != nil {
+		return Commit{}, fmt.Errorf("reading object %s: %v", ref, err)
+	}
+	rdr := strings.NewReader(sb.String())
 	return ReadCommit(rdr)
+}
+
+func GetTree(m Manager, ref string) (Tree, error) {
+	if len(ref) != 40 {
+		panic(ref)
+	}
+	var sb strings.Builder
+	if err := m.ReadObject(ref, &sb); err != nil {
+		return nil, fmt.Errorf("reading object %s: %v", ref, err)
+	}
+	rdr := strings.NewReader(sb.String())
+	return ReadTree(rdr)
 }
 
 // ReadCommit reads commit information from a io.Reader which you can pretend
 // supplies the same content as the output of
 //	git cat-file -p <ref>
 func ReadCommit(rdr io.Reader) (Commit, error) {
-
 	result := Commit{}
-
 	scanner := bufio.NewScanner(rdr)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -243,7 +259,7 @@ func ReadCommit(rdr io.Reader) (Commit, error) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return result, fmt.Errorf("reading commit object:%v", err)
+		return result, fmt.Errorf("reading commit object: %v", err)
 	}
 	return result, nil
 }
@@ -272,7 +288,7 @@ func ReadTree(rdr io.Reader) (Tree, error) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return result, fmt.Errorf("reading commit object:%v", err)
+		return nil, fmt.Errorf("reading commit object: %v", err)
 	}
 	return result, nil
 }
