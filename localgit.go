@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"os"
 	"os/exec"
 	"path"
 	"strings"
@@ -88,7 +89,20 @@ func (lg localGit) ReadObject(sha string, contents io.Writer) error {
 }
 
 func (lg localGit) ReadRaw(sha string, contents io.Writer) error {
-	return errors.New("not implemented")
+	if len(sha) != 40 {
+		return fmt.Errorf("invalid sha: \"%s\"", sha)
+	}
+	fullPath := path.Join(lg.gitDir, "objects", sha[:2], sha[2:])
+	f, err := os.Open(fullPath)
+	if err != nil {
+		return fmt.Errorf(`opening "%s": %v`, fullPath, err)
+	}
+	defer f.Close()
+	_, err = io.Copy(contents, f)
+	if err != nil {
+		return fmt.Errorf(`reading "%s": %v`, fullPath, err)
+	}
+	return nil
 }
 
 func (lg localGit) WriteRaw(sha string, contents io.Reader) error {

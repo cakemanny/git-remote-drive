@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -47,9 +48,8 @@ func TestLocalGit(t *testing.T) {
 		}
 	})
 
+	const hisha string = "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
 	t.Run("TestReadObject", func(t *testing.T) {
-
-		hisha := "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
 		var sb strings.Builder
 		err = lg.ReadObject(hisha, &sb)
 		if err != nil {
@@ -58,6 +58,17 @@ func TestLocalGit(t *testing.T) {
 		expected := "hi\n"
 		if sb.String() != expected {
 			t.Errorf(`expected: "%s", actual: "%s"`, expected, sb.String())
+		}
+	})
+	t.Run("TestReadRaw", func(t *testing.T) {
+		var buf bytes.Buffer
+		err := lg.ReadRaw(hisha, &buf)
+		if err != nil {
+			t.Fatal("unexpected error", err)
+		}
+		b := buf.Bytes()
+		if len(b) != 18 {
+			t.Errorf("expected buffer of 18 bytes, actually had %d bytes", len(b))
 		}
 	})
 }
