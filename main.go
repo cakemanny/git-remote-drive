@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -166,3 +167,50 @@ func listRefs(out io.Writer, lister RefLister) {
 	// End with blank line
 	fmt.Fprintln(out)
 }
+
+func reachableObjects(m Manager, commitRef string) (map[string]bool, error) {
+	commit, err := GetCommit(m, commitRef)
+	if err != nil {
+		return nil, fmt.Errorf("getting commit %s: %v", commitRef, err)
+	}
+
+	result := map[string]bool{}
+
+	mergeInto := func(dst, src map[string]bool) {
+		for k, v := range src {
+			// test v so that we don't add to dst unnecessarily
+			if v {
+				dst[k] = true
+			}
+		}
+	}
+
+	//
+	{
+		tobs, err := reachableObjectsFromTree(m, commit.Tree)
+		if err != nil {
+			return nil, fmt.Errorf("exploring tree %s: %v", commit.Tree, err)
+		}
+		result[commit.Tree] = true
+		mergeInto(result, tobs)
+		tobs = nil
+	}
+
+	for _, parentRef := range commit.Parents {
+		result[parentRef] = true
+		pobs, err := reachableObjects(m, parentRef)
+		if err != nil {
+			return nil, fmt.Errorf("getting parent commits of %s: %v", commitRef, err)
+		}
+		mergeInto(result, pobs)
+		pobs = nil
+	}
+
+	return result, nil
+}
+
+func reachableObjectsFromTree(m Manager, treeRef string) (map[string]bool, error) {
+	return nil, errors.New("not implemented")
+}
+
+//

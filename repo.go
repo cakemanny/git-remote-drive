@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -67,6 +68,30 @@ type Ref struct {
 	Value string
 	// refs/heads/master
 	Name string
+}
+
+// Commit represents a git commit object
+type Commit struct {
+
+	// Tree is the reference to the tree object
+	Tree string
+
+	// Parents is a slice of references to the parent commits
+	Parents []string
+}
+
+type ObjectType uint
+
+const (
+	BLOB ObjectType = iota
+	TREE
+	COMMIT
+)
+
+// Tree represents a git tree object
+type Tree []struct {
+	Type ObjectType
+	Ref  string
 }
 
 // storeManager is an implementation of the git repo Manager over a
@@ -176,4 +201,78 @@ func (m storeManager) ReadRef(name string) (string, error) {
 
 func (storeManager) WriteRef(ref Ref) error {
 	return errors.New("not implemented")
+}
+
+func GetCommit(m Manager, ref string) (Commit, error) {
+	rdr, wrtr := io.Pipe()
+	go m.ReadObject(ref, wrtr)
+	return ReadCommit(rdr)
+}
+
+// ReadCommit reads commit information from a io.Reader which you can pretend
+// supplies the same content as the output of
+//	git cat-file -p <ref>
+func ReadCommit(rdr io.Reader) (Commit, error) {
+
+	result := Commit{}
+
+	scanner := bufio.NewScanner(rdr)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+
+		if len(fields) == 0 {
+			// Remainder will just be commit message
+			// consume stream
+			for scanner.Scan() {
+			}
+			break
+		}
+		if len(fields) == 1 {
+			log.Fatalln("ReadCommit: unexpected number of fields in commit line:", line)
+		}
+		switch fields[0] {
+		case "tree":
+			result.Tree = fields[1]
+		case "parent":
+			result.Parents = append(result.Parents, fields[1])
+		case "author":
+		case "committer":
+		default:
+			log.Fatalln("ReadCommit: unexpected commit field:", fields[0], fields[1])
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return result, fmt.Errorf("reading commit object:%v", err)
+	}
+	return result, nil
+}
+
+func ReadTree(rdr io.Reader) (Tree, error) {
+	result := Tree{}
+	scanner := bufio.NewScanner(rdr)
+	for scanner.Scan() {
+		// <perms> <type> <sha1>	<filename>
+		line := scanner.Text()
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			log.Fatalln("ReadTree: unexpected number of fields in tree line:", line)
+		}
+		type Item struct {
+			Type ObjectType
+			Ref  string
+		}
+		switch fields[1] {
+		case "blob":
+			result = append(result, Item{Type: BLOB, Ref: fields[2]})
+		case "tree":
+			result = append(result, Item{Type: TREE, Ref: fields[2]})
+		default:
+			log.Fatalln("ReadTree: unexpected object type:", fields[1])
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return result, fmt.Errorf("reading commit object:%v", err)
+	}
+	return result, nil
 }

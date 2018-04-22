@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"io"
+	"strings"
 	"testing"
 
 	store "github.com/cakemanny/git-remote-drive/store"
@@ -98,3 +99,60 @@ func TestReadRef(t *testing.T) {
 		}
 	}
 }
+
+func TestReadCommit(t *testing.T) {
+	rdr := strings.NewReader(
+		"tree 07b2986536979a8e6b6028c6a670012b4b4ac262\n" +
+			"parent 7879dfcfd2db5c052284d7077441e9500672a702\n" +
+			"parent 35a3be730435891d106bd4a7eefba3183ab14d54\n" +
+			"author cakemanny <goldingd89@gmail.com> 1524238149 +0100\n" +
+			"committer cakemanny <goldingd89@gmail.com> 1524238149 +0100\n" +
+			"\n" +
+			"Merge branch 'branch1'\n",
+	)
+
+	expected := Commit{
+		Tree: "07b2986536979a8e6b6028c6a670012b4b4ac262",
+		Parents: []string{
+			"7879dfcfd2db5c052284d7077441e9500672a702",
+			"35a3be730435891d106bd4a7eefba3183ab14d54",
+		},
+	}
+
+	actual, err := ReadCommit(rdr)
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+
+	// can't directly compare
+	if expected.Tree != actual.Tree ||
+		len(expected.Parents) != len(actual.Parents) ||
+		expected.Parents[0] != actual.Parents[0] ||
+		expected.Parents[1] != actual.Parents[1] {
+		//
+		t.Error("expected:", expected, "actual:", actual)
+	}
+}
+
+func TestReadTree(t *testing.T) {
+	rdr := strings.NewReader(
+		"100644 blob 7311bd3ca3f61d3731a390d88422977b8d23a016\tREADME\n" +
+			"040000 tree 562d81834eec9f1701b7ee35ea50767edb2c4e8a\tsomedir\n",
+	)
+
+	expected := Tree{
+		{Type: BLOB, Ref: "7311bd3ca3f61d3731a390d88422977b8d23a016"},
+		{Type: TREE, Ref: "562d81834eec9f1701b7ee35ea50767edb2c4e8a"},
+	}
+
+	actual, err := ReadTree(rdr)
+	if err != nil {
+		t.Error("unexpected error:", err)
+	}
+
+	if len(actual) != 2 || expected[0] != actual[0] || expected[1] != actual[1] {
+		t.Error("expected:", expected, "actual:", actual)
+	}
+}
+
+//
