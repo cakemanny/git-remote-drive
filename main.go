@@ -128,7 +128,7 @@ func dispatch(line string, out io.Writer, manager Manager) {
 			return x[0], x[1]
 		}()
 
-		var localManager Manager = localGit{
+		var localManager = localGit{
 			gitDir: os.Getenv("GIT_DIR"),
 		}
 
@@ -142,6 +142,20 @@ func dispatch(line string, out io.Writer, manager Manager) {
 		}
 		log.Println("localRef", localRef)
 		log.Println("remoteRef", remoteRef)
+
+		// assumes ref points to a commit, what if the ref points to
+		// an annotated tag instead of a commit? bail for the moment
+		for _, ref := range []string{localRef, remoteRef} {
+			refType, err := localManager.GetType(ref)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			if refType != "commit" {
+				fmt.Fprintf(out, "error %s \"unsupported object type: %s\"\n", localRefName, refType)
+				fmt.Fprintln(out)
+				return
+			}
+		}
 
 		toSync, err := reachableObjects(localManager, localRef)
 		if err != nil {

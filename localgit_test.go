@@ -25,12 +25,12 @@ func TestLocalGit(t *testing.T) {
 		"git add test.txt && " +
 		"git commit -m 'initial commit' " +
 		" --author='A U Thor <author@example.com>' " +
-		" --date='1970-01-01 00:00:00'"
+		" --date='1970-01-01 00:00:00'" //+ " && git gc"
 	if err := exec.Command("/bin/sh", "-c", script).Run(); err != nil {
 		t.Fatal("git init add and commit:", err)
 	}
 
-	var lg Manager = localGit{gitDir: ".git"}
+	var lg = localGit{gitDir: ".git"}
 
 	t.Run("TestReadRef", func(t *testing.T) {
 		refs, err := lg.ListRefs()
@@ -69,6 +69,15 @@ func TestLocalGit(t *testing.T) {
 		b := buf.Bytes()
 		if len(b) != 18 {
 			t.Errorf("expected buffer of 18 bytes, actually had %d bytes", len(b))
+		}
+	})
+	t.Run("TestGetType", func(t *testing.T) {
+		refType, err := lg.GetType(hisha)
+		if err != nil {
+			t.Error("unexpected error", err)
+		}
+		if refType != "blob" {
+			t.Errorf(`expected: "blob" actual: "%s"`, refType)
 		}
 	})
 }

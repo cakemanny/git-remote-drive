@@ -38,7 +38,7 @@ func (lg localGit) ListRefs() ([]Ref, error) {
 		var value, name string
 		if _, err := fmt.Sscanf(line, "%s %s", &value, &name); err != nil {
 			log.Fatalf(
-				"git show-ref output not in expected format: \"%s\": %v",
+				`git show-ref output not in expected format: "%s": %v`,
 				line, err,
 			)
 		}
@@ -72,6 +72,17 @@ func (lg localGit) WriteRef(ref Ref) error {
 	return nil
 }
 
+func (lg localGit) GetType(sha string) (string, error) {
+	if len(sha) != 40 {
+		return "", fmt.Errorf(`invalid sha: "%s"`, sha)
+	}
+	res, err := exec.Command("git", "cat-file", "-t", sha).Output()
+	if err != nil {
+		return "", fmt.Errorf("getting type of %s", sha)
+	}
+	return strings.TrimRight(string(res), "\n"), nil
+}
+
 func (lg localGit) ReadObject(sha string, contents io.Writer) error {
 	cmd := exec.Command("git", "cat-file", "-p", sha)
 	stdout, err := cmd.StdoutPipe()
@@ -89,8 +100,10 @@ func (lg localGit) ReadObject(sha string, contents io.Writer) error {
 }
 
 func (lg localGit) ReadRaw(sha string, contents io.Writer) error {
+	// This will certainly not work if there are packs
+	// git gc before testing
 	if len(sha) != 40 {
-		return fmt.Errorf("invalid sha: \"%s\"", sha)
+		return fmt.Errorf(`invalid sha: "%s"`, sha)
 	}
 	fullPath := path.Join(lg.gitDir, "objects", sha[:2], sha[2:])
 	f, err := os.Open(fullPath)

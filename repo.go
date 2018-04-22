@@ -86,6 +86,7 @@ const (
 	BLOB ObjectType = iota
 	TREE
 	COMMIT
+	TAG
 )
 
 // Tree represents a git tree object
