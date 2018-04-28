@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/zlib"
 	"errors"
 	"fmt"
 	"io"
@@ -51,6 +52,7 @@ func (lg localGit) ListRefs() ([]Ref, error) {
 }
 
 func (lg localGit) ReadRef(name string) (string, error) {
+	// Maybe we should be using git-rev-parse?
 	// read file
 	bs, err := ioutil.ReadFile(path.Join(lg.gitDir, name))
 	if err != nil {
@@ -63,6 +65,7 @@ func (lg localGit) ReadRef(name string) (string, error) {
 }
 
 func (lg localGit) WriteRef(ref Ref) error {
+	// Maybe we should be using git-update-ref?
 	fullPath := path.Join(lg.gitDir, ref.Value)
 	data := []byte(ref.Value + "\n")
 	// 0666 is before umask
@@ -100,20 +103,60 @@ func (lg localGit) ReadObject(sha string, contents io.Writer) error {
 }
 
 func (lg localGit) ReadRaw(sha string, contents io.Writer) error {
-	// This will certainly not work if there are packs
-	// git gc before testing
 	if len(sha) != 40 {
 		return fmt.Errorf(`invalid sha: "%s"`, sha)
 	}
 	fullPath := path.Join(lg.gitDir, "objects", sha[:2], sha[2:])
-	f, err := os.Open(fullPath)
+	file, err := os.Open(fullPath)
 	if err != nil {
+		// If the file is not loose it may well be packed
+		pathErr, ok := err.(*os.PathError)
+		if ok && pathErr.Err.Error() == "no such file or directory" {
+			return lg.readPacked(sha, contents)
+		}
+		// Want to check if is filenotfound
 		return fmt.Errorf(`opening "%s": %v`, fullPath, err)
 	}
-	defer f.Close()
-	_, err = io.Copy(contents, f)
+	defer file.Close()
+	_, err = io.Copy(contents, file)
 	if err != nil {
 		return fmt.Errorf(`reading "%s": %v`, fullPath, err)
+	}
+	return nil
+}
+
+func (lg localGit) readPacked(sha string, contents io.Writer) error {
+	// Idea (explained in shell):
+	//   type=$(git cat-file -t $sha)
+	//   size=$(git cat-file -s $sha)
+	//   content=$(git cat-file $type $sha)
+	//   echo -nE "$type $size"$'\0'"$content" | zlib-flate -compress
+
+	objectType, err := lg.GetType(sha)
+	if err != nil {
+		return err
+	}
+	sizeRes, err := exec.Command("git", "cat-file", "-s", sha).Output()
+	if err != nil {
+		return fmt.Errorf("getting size of object %s: %v", sha, err)
+	}
+	size := strings.TrimRight(string(sizeRes), "\n")
+
+	content, err := exec.Command("git", "cat-file", objectType, sha).Output()
+	if err != nil {
+		return fmt.Errorf("getting content of object %s: %v", sha, err)
+	}
+
+	zlibWrtr := zlib.NewWriter(contents)
+	defer zlibWrtr.Close()
+	if _, err = zlibWrtr.Write([]byte(objectType + " " + size)); err != nil {
+		return err
+	}
+	if _, err = zlibWrtr.Write([]byte{0}); err != nil {
+		return err
+	}
+	if _, err = zlibWrtr.Write(content); err != nil {
+		return err
 	}
 	return nil
 }

@@ -2,6 +2,10 @@ package main
 
 import (
 	"bytes"
+	"compress/zlib"
+	"crypto/sha1"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -9,7 +13,25 @@ import (
 	"testing"
 )
 
+func sha1Bytes(b []byte) (string, error) {
+	rdr := bytes.NewReader(b)
+	zlibReader, err := zlib.NewReader(rdr)
+	if err != nil {
+		return "", fmt.Errorf("inflating stream: %v", err)
+	}
+	defer zlibReader.Close()
+	// decompress
+	hasher := sha1.New()
+	io.Copy(hasher, zlibReader)
+	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
+}
+
 func TestLocalGit(t *testing.T) {
+	testLocalGit(t, true)
+	testLocalGit(t, false)
+}
+
+func testLocalGit(t *testing.T, gc bool) {
 	startDir := os.Getenv("PWD")
 
 	tmpDir, err := ioutil.TempDir("", "tmprepo")
@@ -25,7 +47,11 @@ func TestLocalGit(t *testing.T) {
 		"git add test.txt && " +
 		"git commit -m 'initial commit' " +
 		" --author='A U Thor <author@example.com>' " +
-		" --date='1970-01-01 00:00:00'" //+ " && git gc"
+		" --date='1970-01-01 00:00:00'"
+	if gc {
+		// gc so we test with packs instead of loose objects
+		script += " && git gc"
+	}
 	if err := exec.Command("/bin/sh", "-c", script).Run(); err != nil {
 		t.Fatal("git init add and commit:", err)
 	}
@@ -66,9 +92,26 @@ func TestLocalGit(t *testing.T) {
 		if err != nil {
 			t.Fatal("unexpected error", err)
 		}
-		b := buf.Bytes()
-		if len(b) != 18 {
-			t.Errorf("expected buffer of 18 bytes, actually had %d bytes", len(b))
+		actualSha, err := sha1Bytes(buf.Bytes())
+		if err != nil {
+			t.Error("error hashing contents: ", err)
+		}
+		if actualSha != hisha {
+			t.Error("expected-sha1:", hisha, "actual-sha1:", actualSha)
+		}
+	})
+	t.Run("TestReadPacked", func(t *testing.T) {
+		var buf bytes.Buffer
+		err := lg.readPacked(hisha, &buf)
+		if err != nil {
+			t.Fatal("unexpected error", err)
+		}
+		actualSha, err := sha1Bytes(buf.Bytes())
+		if err != nil {
+			t.Error("error hashing contents: ", err)
+		}
+		if actualSha != hisha {
+			t.Error("expected-sha1:", hisha, "actual-sha1:", actualSha)
 		}
 	})
 	t.Run("TestGetType", func(t *testing.T) {
