@@ -12,7 +12,7 @@ Progress to initial working first draft:
 Things to go in a v1:
 - [ ] `--init` or `--auth` option to run outh2 flow
 - [ ] loopback interface redirect for oauth2 browser, instead of copy/paste
-- [ ] caching layer to reduce naive API calls
+- [x] caching layer to reduce naive API calls
 - [ ] use go's channels to push or fetch multiple objects concurrently
 - [ ] continuous integration
 
@@ -146,5 +146,5 @@ Since this is my first project in go, please feel free to comment on the
 implementation, and suggest improvements, perhaps by pull request.
 
 <!-- Do we want this? -->
-<footer><small>Copyright &copy; 2018 Daniel Golding - MIT License</small></footer>
+Copyright &copy; 2018 Daniel Golding - MIT License
 

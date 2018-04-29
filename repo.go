@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
-	"errors"
+	"bytes"
+	"compress/zlib"
+	"crypto/sha1"
 	"fmt"
 	"io"
 	"log"
@@ -10,6 +12,7 @@ import (
 	"strings"
 	"unicode"
 
+	errors "github.com/cakemanny/git-remote-drive/errors"
 	store "github.com/cakemanny/git-remote-drive/store"
 )
 
@@ -130,7 +133,7 @@ func (m storeManager) ListRefs() ([]Ref, error) {
 			log.Printf("walking \"%s\"", baseDir)
 		}
 		list, err := m.store.List(baseDir)
-		if err == store.ErrNotFound {
+		if _, isNotFound := err.(errors.ErrNotFound); isNotFound {
 			return nil
 		}
 		if err != nil {
@@ -176,18 +179,70 @@ func (m storeManager) ReadRaw(sha string, contents io.Writer) error {
 	return m.store.Read(fullPath, contents)
 }
 
+func sha1Bytes(b []byte) (string, error) {
+	rdr := bytes.NewReader(b)
+	zlibReader, err := zlib.NewReader(rdr)
+	if err != nil {
+		return "", fmt.Errorf("inflating stream: %v", err)
+	}
+	defer zlibReader.Close()
+	// decompress
+	hasher := sha1.New()
+	io.Copy(hasher, zlibReader)
+	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
+}
+
+// verifyObject checks that an object is present in the store and the sha1
+// of the data matches.
+func (m storeManager) verifyObject(sha string) error {
+	log.Println("verifying object", sha)
+	var buf bytes.Buffer
+	if err := m.ReadRaw(sha, &buf); err != nil {
+		return err
+	}
+	actualSha, err := sha1Bytes(buf.Bytes())
+	if err != nil {
+		return err
+	}
+	if sha != actualSha {
+		return fmt.Errorf("invalid object %s: sha1 of content is %s, "+
+			"compressed size is %d bytes", sha, actualSha, len(buf.Bytes()))
+	}
+	return nil
+}
+
 func (m storeManager) WriteRaw(sha string, contents io.Reader) error {
 	fullPath, err := m.objectPath(sha)
 	if err != nil {
 		return err
 	}
 	// Test path? If not exists create?
-	// We surely don't need to "update" any objects
-	return m.store.Update(fullPath, contents)
+	exists, err := m.store.TestPath(fullPath)
+	if err != nil {
+		return err
+	}
+	if exists {
+		// We surely don't need to "update" any objects
+		// so just verify it's ok
+		err := m.verifyObject(sha)
+		_, invalid := err.(errors.ErrInvalidObject)
+		if invalid {
+			if deleteErr := m.store.Delete(fullPath); deleteErr != nil {
+				return fmt.Errorf(
+					"object %s contains invalid data, but cannot be deleted: %v",
+					sha,
+					deleteErr,
+				)
+			}
+			return m.store.Create(fullPath, contents)
+		}
+		return err
+	}
+	return m.store.Create(fullPath, contents)
 }
 
 func (storeManager) ReadObject(sha string, contents io.Writer) error {
-	return errors.New("not implemented")
+	return errors.NotImplemented()
 }
 
 func (m storeManager) ReadRef(name string) (string, error) {
@@ -200,8 +255,23 @@ func (m storeManager) ReadRef(name string) (string, error) {
 	return strings.TrimRight(sb.String(), "\n"), nil
 }
 
-func (storeManager) WriteRef(ref Ref) error {
-	return errors.New("not implemented")
+func (m storeManager) WriteRef(ref Ref) error {
+	fullPath := path.Join(m.basePath, ref.Name)
+	exists, err := m.store.TestPath(fullPath)
+	if err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	buf.WriteString(ref.Value)
+	buf.WriteByte('\n')
+	writeMethod := m.store.Create
+	if exists {
+		writeMethod = m.store.Update
+	}
+	if err = writeMethod(fullPath, &buf); err != nil {
+		return fmt.Errorf("updating ref %s: %v", ref.Name, err)
+	}
+	return nil
 }
 
 func GetCommit(m Manager, ref string) (Commit, error) {

@@ -1,11 +1,11 @@
 package main
 
 import (
-	"errors"
 	"io"
 	"strings"
 	"testing"
 
+	errors "github.com/cakemanny/git-remote-drive/errors"
 	store "github.com/cakemanny/git-remote-drive/store"
 )
 
@@ -50,7 +50,7 @@ func (s mapStore) Read(name string, contents io.Writer) error {
 	m := s.contents
 	v, ok := m[name]
 	if !ok {
-		return store.ErrNotFound
+		return errors.ErrNotFound{name}
 	}
 	contents.Write([]byte(v))
 	return nil
@@ -59,18 +59,23 @@ func (s mapStore) List(path string) ([]store.File, error) {
 	m := s.listings
 	v, ok := m[path]
 	if !ok {
-		return nil, store.ErrNotFound
+		return nil, errors.ErrNotFound{path}
 	}
 	return v, nil
 }
 func (mapStore) Create(path string, contents io.Reader) error {
-	return errors.New("not implemented")
+	return errors.NotImplemented()
 }
 func (mapStore) Update(path string, contents io.Reader) error {
-	return errors.New("not implemented")
+	return errors.NotImplemented()
 }
 func (mapStore) Delete(path string) error {
-	return errors.New("not implemented")
+	return errors.NotImplemented()
+}
+func (s mapStore) TestPath(path string) (bool, error) {
+	m := s.listings
+	_, ok := m[path]
+	return ok, nil
 }
 
 func TestReadRef(t *testing.T) {

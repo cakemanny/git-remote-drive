@@ -2,7 +2,6 @@ package store
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,6 +15,8 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
+
+	"github.com/cakemanny/git-remote-drive/errors"
 )
 
 var (
@@ -23,12 +24,14 @@ var (
 	secretPath = os.ExpandEnv("$HOME/.git-remote-drive.secret")
 
 	// So we get compile-time errors when we fat-finger this
+	// I think the root of the user folder space has alias "root"
 	appDataFolder = "appDataFolder"
 )
 
 // driveAPIClient is an implementation of a SimpleFileStore using Google Drive.
 type driveAPIClient struct {
-	srv *drive.Service
+	srv     *drive.Service
+	idCache map[[2]string]string
 }
 
 // Retrieve a token, saves the token, then returns the generated client.
@@ -100,15 +103,17 @@ func NewClient() SimpleFileStore {
 	if err != nil {
 		log.Fatalf("Unable to retrieve Drive client: %v", err)
 	}
-	return driveAPIClient{srv}
+	return driveAPIClient{srv, map[[2]string]string{}}
 }
 
 // MkDir creates a folder recursively (think mkdir -p) and returns the
 // file id of the created directory.
 func (client driveAPIClient) MkDir(path string) (string, error) {
-	parentID, err := GetIDRecursive(client, path)
-	if err == ErrNotFound {
-		parentID, err = client.MkDir(paths.Dir(path))
+	log.Println("MkDir", path)
+	parentPath := paths.Dir(path)
+	parentID, err := GetIDRecursive(client, parentPath)
+	if _, ok := err.(errors.ErrNotFound); ok {
+		parentID, err = client.MkDir(parentPath)
 	}
 	if err != nil {
 		return "", err
@@ -128,6 +133,23 @@ func (client driveAPIClient) MkDir(path string) (string, error) {
 // GetID returns the file ID of a file with the given name in the
 // folder with ID parentID
 func (client driveAPIClient) GetID(name string, parentID string) (string, error) {
+	log.Println("GetID", name, parentID)
+	key := [2]string{name, parentID}
+	fileID, ok := client.idCache[key]
+	if ok {
+		return fileID, nil
+	}
+	fileID, err := client.getID(name, parentID)
+	if err != nil {
+		return fileID, err
+	}
+	client.idCache[key] = fileID
+	return fileID, nil
+}
+
+// getID is the underlying implementation of GetID without the caching
+func (client driveAPIClient) getID(name string, parentID string) (string, error) {
+	log.Println("getID", name, parentID)
 	if parentID == "" {
 		parentID = appDataFolder
 	}
@@ -149,7 +171,7 @@ func (client driveAPIClient) GetID(name string, parentID string) (string, error)
 		return "", err
 	}
 	if len(r.Files) == 0 {
-		return "", ErrNotFound
+		return "", errors.ErrNotFound{name} // Shouldn't we have whole path?
 	}
 	// Should we error if there are more than one result?
 	if len(r.Files) > 1 {
@@ -160,6 +182,7 @@ func (client driveAPIClient) GetID(name string, parentID string) (string, error)
 
 // Create creates a file in the user's Google Drive
 func (client driveAPIClient) Create(path string, contents io.Reader) error {
+	log.Println("Create", path)
 	// 1. Resolve the parent path - create if not exists
 	parentPath := paths.Dir(path)
 	parentID, err := func() (string, error) {
@@ -168,7 +191,7 @@ func (client driveAPIClient) Create(path string, contents io.Reader) error {
 		}
 		return GetIDRecursive(client, parentPath)
 	}()
-	if err == ErrNotFound {
+	if _, ok := err.(errors.ErrNotFound); ok {
 		parentID, err = client.MkDir(parentPath)
 		if err != nil {
 			err = fmt.Errorf("error creating directory %s: %s", parentPath, err)
@@ -186,11 +209,12 @@ func (client driveAPIClient) Create(path string, contents io.Reader) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Created file, ID: %s\n", result.Id)
+	log.Printf("Created file %s, ID: %s\n", path, result.Id)
 	return nil
 }
 
 func (client driveAPIClient) Read(path string, contents io.Writer) error {
+	log.Println("Read", path)
 	fileID, err := func() (string, error) {
 		if path == "/" || path == "" {
 			return appDataFolder, nil
@@ -215,6 +239,7 @@ func (client driveAPIClient) Read(path string, contents io.Writer) error {
 }
 
 func (client driveAPIClient) List(path string) ([]File, error) {
+	log.Println("List", path)
 	folderID, err := func() (string, error) {
 		if path == "/" || path == "" {
 			return appDataFolder, nil
@@ -242,12 +267,30 @@ func (client driveAPIClient) List(path string) ([]File, error) {
 }
 
 func (client driveAPIClient) Delete(path string) error {
+	log.Println("Delete", path)
 	// not sure this is needed -- maybe for refs?
-	return errors.New("not implemented")
+	// Delete and recreate invalid objects
+	return errors.NotImplemented()
 }
 
 func (client driveAPIClient) Update(path string, contents io.Reader) error {
+	log.Println("Update", path)
 	// Only expect this to be used for refs
 
-	return errors.New("not implemented")
+	return errors.NotImplemented()
+}
+
+func (client driveAPIClient) TestPath(path string) (bool, error) {
+	log.Println("TestPath", path)
+	if path == "/" || path == "" {
+		return true, nil
+	}
+	_, err := GetIDRecursive(client, path)
+	if err != nil {
+		if _, ok := err.(errors.ErrNotFound); ok {
+			return false, nil
+		}
+		return false, fmt.Errorf("error testing path: %v", err)
+	}
+	return true, nil
 }

@@ -3,6 +3,8 @@ package store
 import (
 	"fmt"
 	"testing"
+
+	"github.com/cakemanny/git-remote-drive/errors"
 )
 
 type fakeIDGetter struct{}
@@ -19,7 +21,7 @@ func (fakeIDGetter) GetID(name string, parentID string) (string, error) {
 	} else if name == "c" && parentID == "2" {
 		return "3", nil
 	}
-	return "", ErrNotFound
+	return "", errors.ErrNotFound{name}
 }
 
 func TestGetIDRecursive(t *testing.T) {
@@ -46,7 +48,7 @@ func TestGetIDRecursive(t *testing.T) {
 	}
 	for _, p := range nonExistantPaths {
 		actual, err := GetIDRecursive(fakeIDGetter{}, p)
-		if err != ErrNotFound {
+		if _, ok := err.(errors.ErrNotFound); !ok {
 			t.Errorf("for input %s, expected ErrNotFound, actual (%s,%s)", p, actual, err)
 		}
 	}

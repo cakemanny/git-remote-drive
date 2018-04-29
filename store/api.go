@@ -1,14 +1,8 @@
 package store
 
 import (
-	"errors"
 	"io"
 	paths "path"
-)
-
-var (
-	// ErrNotFound is returned when a file cannot be found
-	ErrNotFound = errors.New("not found")
 )
 
 // File represents a filesystem entry
@@ -29,6 +23,7 @@ type SimpleFileStore interface {
 	Update(path string, contents io.Reader) error
 	Delete(path string) error
 	List(path string) ([]File, error)
+	TestPath(path string) (bool, error)
 }
 
 // define this to allow us to unit test the recursive ID getter

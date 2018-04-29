@@ -2,10 +2,12 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"log"
 	"os"
+
 	"strings"
 
 	"github.com/cakemanny/git-remote-drive/store"
@@ -179,6 +181,50 @@ func dispatch(line string, out io.Writer, manager Manager) {
 
 		// Now send all the objects
 		// Then update the remote ref
+
+		localErrors := map[string]error{}
+		remoteErrors := map[string]error{}
+
+		for objectRef, doSync := range toSync {
+			if doSync {
+				var buf bytes.Buffer
+				err := localManager.ReadRaw(objectRef, &buf)
+				if err != nil {
+					localErrors[objectRef] = err
+					continue
+				}
+				err = manager.WriteRaw(objectRef, &buf)
+				if err != nil {
+					remoteErrors[objectRef] = err
+				}
+			}
+		}
+
+		if len(localErrors) > 0 {
+			for sha, err := range localErrors {
+				log.Printf("error reading object %s: %v", sha, err)
+			}
+			fmt.Fprintf(out, "error %s \"error reading local objects\"\n", localRefName)
+			fmt.Fprintln(out)
+			return
+		}
+		if len(remoteErrors) > 0 {
+			for sha, err := range remoteErrors {
+				log.Printf("error writing object %s: %v", sha, err)
+			}
+			fmt.Fprintf(out, "error %s \"error writing remote objects\"\n", localRefName)
+			fmt.Fprintln(out)
+			return
+		}
+
+		err = manager.WriteRef(Ref{
+			Value: localRef,
+			Name:  remoteRefName,
+		})
+		if err != nil {
+			fmt.Fprintf(out, "error %s \"error updating remote reference\"\n", localRefName)
+			fmt.Fprintln(out)
+		}
 
 		fmt.Fprintf(out, "error %s \"implementation not finished\"\n", localRefName)
 		fmt.Fprintln(out)

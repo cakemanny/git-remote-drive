@@ -2,29 +2,12 @@ package main
 
 import (
 	"bytes"
-	"compress/zlib"
-	"crypto/sha1"
-	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
 )
-
-func sha1Bytes(b []byte) (string, error) {
-	rdr := bytes.NewReader(b)
-	zlibReader, err := zlib.NewReader(rdr)
-	if err != nil {
-		return "", fmt.Errorf("inflating stream: %v", err)
-	}
-	defer zlibReader.Close()
-	// decompress
-	hasher := sha1.New()
-	io.Copy(hasher, zlibReader)
-	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
-}
 
 func TestLocalGit(t *testing.T) {
 	testLocalGit(t, true)
