@@ -36,7 +36,6 @@ func main() {
 	remoteName := os.Args[1]
 	_ = remoteName
 	driveUrl := os.Args[2]
-	_ = driveUrl
 
 	var fileStore store.SimpleFileStore = store.NewClient()
 	var manager Manager = storeManager{
