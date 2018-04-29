@@ -37,16 +37,16 @@ Getting Started
 ### Setting up
 * Create a project in the
   [Google API Console](https://console.developers.google.com/)
-* Enable the Google Drive API in your project.
-  - Click the *Enable APIs and services* or go *APIs & Services > Library* in
-  the menu.
-  - Find *Google Drive API* and enable it for your project.
-* Create a client secret key.
+* Enable the Google Drive API in your project:
+  - Go to the [API Library page](https://console.developers.google.com/apis/library)
+  - Find **Google Drive API** and enable it for your project.
+* Create a client secret key:
   - Go to the [Credentials page](https://console.developers.google.com/apis/credentials)
-  - From the *Create credentials* dropdown select *OAuth client ID*
-  - Select *Other* as the application type
-  - Name the client something like *git-remote-drive-client*
-  - Create * Dismiss the popup
+  - From the **Create credentials** dropdown select **OAuth client ID**
+  - Select **Other** as the application type
+  - Name the client something like **git-remote-drive-client**
+  - Click **Create**
+  - Dismiss the popup with the client ID and secret
 * Download the credentials file and store it as ~/.git-remote-drive.secret
 * Change the permissions of the secret file to make them private
 
@@ -69,6 +69,7 @@ Download and install `git-remote-drive`:
 $ go get github.com/cakemanny/git-remote-drive
 $ go install github.com/cakemanny/git-remote-drive
 ```
+<!-- TODO: double check that this is how you install go stuff.. -->
 
 * Make sure `$GOPATH/bin` is on your path
 * Or link the binary into a folder that is, e.g:
@@ -79,12 +80,12 @@ $ ln -s $GOPATH/bin/git-remote-drive ~/bin/.
 
 Run the outh2 flow to give the app access to your Google Drive account.
 
-You will be prompted to a follow go to a URL in your browser. Go to the URL
-authorise the app and then paste the token back into the prompt.
-
 ```shell
 $ git-remote-drive --init
 ```
+
+You will be prompted to a follow go to a URL in your browser. Go to the URL
+authorise the app and then paste the token back into the prompt.
 <!-- TODO: add some of the output -->
 
 A token file will be saved in your home directory: `~/.git-remote-drive.json`
@@ -99,11 +100,17 @@ git add README.txt
 git commit -m "initial commit"
 ```
 
-Add the remote
+Then add the remote:
 
 ```shell
 $ git remote add origin drive://path/to/repos/test-project.git
+```
+
+You should now be able to push and fetch from the remote:
+
+```shell
 $ git push origin master
+$ git fetch origin
 ```
 <!-- TODO: add output here! -->
 
@@ -132,10 +139,10 @@ Inspiration and Reason
 This was inspired by having used
 <https://github.com/anishathalye/git-remote-dropbox>
 for a few years, and thinking it would be interesting to see if other cloud
-user file storage providers could be used. I also needed to learn `go`, so
+user file storage providers could be used. I also needed to learn go, so
 what better a marrying?
 
-Since this is my first project in `go`, please feel free to comment on the
+Since this is my first project in go, please feel free to comment on the
 implementation, and suggest improvements, perhaps by pull request.
 
 <!-- Do we want this? -->
