@@ -14,7 +14,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/api/drive/v3"
+	drive "google.golang.org/api/drive/v3"
 
 	"github.com/cakemanny/git-remote-drive/errors"
 )
@@ -30,7 +30,7 @@ var (
 
 // driveAPIClient is an implementation of a SimpleFileStore using Google Drive.
 type driveAPIClient struct {
-	srv     *drive.Service
+	srv     *Service
 	idCache map[[2]string]string
 }
 
@@ -99,7 +99,8 @@ func NewClient() SimpleFileStore {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
 
-	srv, err := drive.New(getClient(config))
+	driveService, err := drive.New(getClient(config))
+	srv := &Service{Files: filesServiceWrapper{driveService.Files}}
 	if err != nil {
 		log.Fatalf("Unable to retrieve Drive client: %v", err)
 	}
