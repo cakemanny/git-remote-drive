@@ -7,6 +7,7 @@ Progress to initial working first draft:
 - [x] `list` and `list for-push`
 - [x] `option`
 - [ ] `fetch`
+      - include notes and tags
 - [ ] `push`
 
 Things to go in a v1:
@@ -144,6 +145,11 @@ what better a marrying?
 
 Since this is my first project in go, please feel free to comment on the
 implementation, and suggest improvements, perhaps by pull request.
+
+The [gitremote-helpers](https://mirrors.edge.kernel.org/pub/software/scm/git/docs/gitremote-helpers.html)
+man page and the [Git Internals](https://git-scm.com/book/en/v2/Git-Internals-Git-Objects)
+chapter of the of the [Pro Git](https://git-scm.com/book/en/v2) book were the
+main references used for this implementation.
 
 <!-- Do we want this? -->
 Copyright &copy; 2018 Daniel Golding - MIT License

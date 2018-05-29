@@ -233,7 +233,7 @@ func (client driveAPIClient) Read(path string, contents io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("while reading \"%s\": %v", path, err)
 	}
-	// Not sure we care about the close error is we managed to read all
+	// Not sure we care about the close error if we managed to read all
 	// successfully
 	r.Body.Close()
 	return nil
