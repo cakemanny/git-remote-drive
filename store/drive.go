@@ -11,7 +11,7 @@ import (
 	paths "path"
 	"strings"
 
-	"golang.org/x/net/context"
+	"context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	drive "google.golang.org/api/drive/v3"
