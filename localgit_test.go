@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -17,8 +16,7 @@ func TestLocalGit(t *testing.T) {
 func testLocalGit(t *testing.T, gc bool) {
 	startDir := os.Getenv("PWD")
 
-	tmpDir, err := ioutil.TempDir("", "tmprepo")
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatal("cd", tmpDir, err)
@@ -30,7 +28,7 @@ func testLocalGit(t *testing.T, gc bool) {
 		"git add test.txt && " +
 		"git commit -m 'initial commit' " +
 		" --author='A U Thor <author@example.com>' " +
-		" --date='1970-01-01 00:00:00'"
+		" --date='1971-01-01 00:00:00'"
 	if gc {
 		// gc so we test with packs instead of loose objects
 		script += " && git gc"
@@ -60,7 +58,7 @@ func testLocalGit(t *testing.T, gc bool) {
 	const hisha string = "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
 	t.Run("TestReadObject", func(t *testing.T) {
 		var sb strings.Builder
-		err = lg.ReadObject(hisha, &sb)
+		err := lg.ReadObject(hisha, &sb)
 		if err != nil {
 			t.Fatal("unexpected error", err)
 		}
