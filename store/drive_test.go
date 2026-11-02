@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -67,12 +68,7 @@ func evalTest(test query.Test, file FakeFile) bool {
 			return false
 		}
 		d2 := evalCollection(test.Rhs, file)
-		for _, value := range d2 {
-			if d1.Lit == value {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(d2, d1.Lit)
 	case query.CONTAINS:
 		// TODO
 	}
@@ -116,7 +112,7 @@ func (fakeFilesService) List() FilesListCall {
 	return fakeFilesListCall{}
 }
 func (fakeFilesService) Get(fileId string) FilesGetCall {
-	return fakeFilesGetCall{}
+	return &fakeFilesGetCall{}
 }
 
 type fakeFilesListCall struct {
@@ -177,7 +173,7 @@ func (lc fakeFilesListCall) Do(opts ...googleapi.CallOption) (*drive.FileList, e
 }
 
 func (fakeFilesService) Create(*drive.File) FilesCreateCall {
-	return fakeFilesCreateCall{}
+	return &fakeFilesCreateCall{}
 }
 
 type fakeFilesCreateCall struct {
@@ -188,23 +184,19 @@ type fakeFilesCreateCall struct {
 	doCalled     int
 }
 
-func (cc fakeFilesCreateCall) Fields(s ...googleapi.Field) FilesCreateCall {
+func (cc *fakeFilesCreateCall) Fields(s ...googleapi.Field) FilesCreateCall {
 	for _, field := range s {
 		cc.fields = append(cc.fields, string(field))
 	}
 	return cc
 }
-func (cc fakeFilesCreateCall) Media(r io.Reader, options ...googleapi.MediaOption) FilesCreateCall {
-	for _, option := range options {
-		cc.mediaOptions = append(cc.mediaOptions, option)
-	}
+func (cc *fakeFilesCreateCall) Media(r io.Reader, options ...googleapi.MediaOption) FilesCreateCall {
+	cc.mediaOptions = append(cc.mediaOptions, options...)
 	cc.reader = r
 	return cc
 }
-func (cc fakeFilesCreateCall) Do(opts ...googleapi.CallOption) (*drive.File, error) {
-	for _, opt := range opts {
-		cc.callOptions = append(cc.callOptions, opt)
-	}
+func (cc *fakeFilesCreateCall) Do(opts ...googleapi.CallOption) (*drive.File, error) {
+	cc.callOptions = append(cc.callOptions, opts...)
 	cc.doCalled++
 	return nil, nil
 }
@@ -213,10 +205,8 @@ type fakeFilesGetCall struct {
 	callOptions []googleapi.CallOption
 }
 
-func (gc fakeFilesGetCall) Download(opts ...googleapi.CallOption) (*http.Response, error) {
-	for _, opt := range opts {
-		gc.callOptions = append(gc.callOptions, opt)
-	}
+func (gc *fakeFilesGetCall) Download(opts ...googleapi.CallOption) (*http.Response, error) {
+	gc.callOptions = append(gc.callOptions, opts...)
 	return nil, nil
 }
 

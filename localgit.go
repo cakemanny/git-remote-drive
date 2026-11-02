@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -54,7 +53,7 @@ func (lg localGit) ListRefs() ([]Ref, error) {
 func (lg localGit) ReadRef(name string) (string, error) {
 	// Maybe we should be using git-rev-parse?
 	// read file
-	bs, err := ioutil.ReadFile(path.Join(lg.gitDir, name))
+	bs, err := os.ReadFile(path.Join(lg.gitDir, name))
 	if err != nil {
 		//var op errors.Op = "localGit.ReadRef"
 		//var param errors.Param = name
@@ -69,7 +68,7 @@ func (lg localGit) WriteRef(ref Ref) error {
 	fullPath := path.Join(lg.gitDir, ref.Value)
 	data := []byte(ref.Value + "\n")
 	// 0666 is before umask
-	if err := ioutil.WriteFile(fullPath, data, 0666); err != nil {
+	if err := os.WriteFile(fullPath, data, 0666); err != nil {
 		return fmt.Errorf("WriteRef: writing %s: %v", ref.Name, err)
 	}
 	return nil
