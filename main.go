@@ -48,7 +48,7 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		line := scanner.Text()
-		log.Printf(line)
+		log.Println(line)
 		dispatch(line, os.Stdout, manager)
 	}
 	if err := scanner.Err(); err != nil {
@@ -174,7 +174,7 @@ func dispatch(line string, out io.Writer, manager Manager) {
 		}
 		inRemote[remoteRef] = true
 		log.Println("inRemote:", inRemote)
-		for k, _ := range inRemote {
+		for k := range inRemote {
 			delete(toSync, k)
 		}
 		log.Println("toSync:", toSync)
